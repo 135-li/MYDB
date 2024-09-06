@@ -15,15 +15,15 @@ import java.nio.channels.FileChannel;
  * @version 1.0
  */
 public interface TransactionManager {
-    long begin();                                                       // 开启一个新事务
+    long begin();                                                        // 开启一个新事务
 
-    void commit(long xid);                                              // 提交一个新事务
+    void commit(long xid);                                               // 提交一个新事务
 
     void abort(long xid);                                                // 取消一个新事务
 
     boolean isActive(long xid);                                          // 查询一个事务的状态是否正在进行
 
-    boolean isCommitted(long xid);                                        // 查询一个事务的状态是否已提交
+    boolean isCommitted(long xid);                                       // 查询一个事务的状态是否已提交
 
     boolean isAborted(long xid);                                          // 查询一个事务的状态是否已取消
 
@@ -61,7 +61,7 @@ public interface TransactionManager {
         }
 
         return new TransactionManagerImpl(raf, fc);
-    }
+    }         // 创建一个新的事务管理文件
 
     public static TransactionManagerImpl open(String path) {
         File f = new File(path + TransactionManagerImpl.XID_SUFFIX);
@@ -82,5 +82,5 @@ public interface TransactionManager {
         }
 
         return new TransactionManagerImpl(raf, fc);
-    }
+    }           // 打开一个事务管理文件
 }

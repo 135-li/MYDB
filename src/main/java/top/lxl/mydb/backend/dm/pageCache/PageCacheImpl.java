@@ -134,10 +134,10 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
     private void flush(Page pg) {
         int pgNo = pg.getPageNumber();
         long offset = pageOffset(pgNo);
+        ByteBuffer buf = ByteBuffer.wrap(pg.getData());
 
         fileLock.lock();
         try {
-            ByteBuffer buf = ByteBuffer.wrap(pg.getData());
             fc.position(offset);
             fc.write(buf);
             fc.force(false);

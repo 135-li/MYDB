@@ -5,7 +5,6 @@ import top.lxl.mydb.common.Error;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -45,6 +44,7 @@ public abstract class AbstractCache<T> {
                   e.printStackTrace();
                   continue;
               }
+              continue;
           }
 
           if(cache.containsKey(key)) {

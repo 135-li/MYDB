@@ -85,7 +85,6 @@ public abstract class AbstractCache<T> {
         return obj;
     }
 
-
     /**
      * 上层资源使用完后，对引用计数更新，如果引用计数变为0，刷回缓存
      */

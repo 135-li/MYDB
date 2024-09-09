@@ -9,6 +9,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
+import java.util.HashMap;
 
 /**
  * @author lxl
@@ -22,7 +23,6 @@ public interface PageCache {
     Page getPage(int pgno) throws Exception;
     void release(Page page);
     void close();
-
     void truncateByPgNo(int maxPgNo);
     int getPageNumber();
     void flushPage(Page pg);

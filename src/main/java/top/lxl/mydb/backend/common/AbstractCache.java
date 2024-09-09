@@ -2,7 +2,9 @@ package top.lxl.mydb.backend.common;
 
 import top.lxl.mydb.common.Error;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -111,8 +113,8 @@ public abstract class AbstractCache<T> {
     protected void close() {
         lock.lock();
         try {
-            Set<Long> keys = cache.keySet();
-            for(Long key : keys) {
+            List<Long> keyList = new ArrayList<>(cache.keySet());
+            for(Long key : keyList) {
                 T obj = cache.get(key);
                 releaseForCache(obj);
                 references.remove(key);

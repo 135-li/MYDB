@@ -1,6 +1,5 @@
 package top.lxl.mydb.backend.dm.pageCache;
 
-import sun.security.util.Length;
 import top.lxl.mydb.backend.common.AbstractCache;
 import top.lxl.mydb.backend.dm.page.Page;
 import top.lxl.mydb.backend.dm.page.PageImpl;
@@ -26,7 +25,7 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
 
     private RandomAccessFile file;
     private FileChannel fc;
-    private Lock fileLock;
+    private Lock fileLock; // 在position 与 read/write操作之间应该可能会由于线程的切换，导致read/write的位置发生改变
 
     private AtomicInteger pageNumbers;
 
@@ -45,8 +44,8 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
         }
         this.file = file;
         this.fc = fileChannel;
-        fileLock = new ReentrantLock();
         this.pageNumbers = new AtomicInteger((int)length / PageCache.PAGE_SIZE);
+        this.fileLock = new ReentrantLock();
     }
 
     /**
@@ -58,11 +57,14 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
         long offset = pageOffset(pgNo);
 
         ByteBuffer buf = ByteBuffer.allocate(PAGE_SIZE);
+        fileLock.lock();
         try {
             fc.position(offset);
             fc.read(buf);
         } catch (IOException e) {
             Panic.panic(e);
+        } finally {
+            fileLock.unlock();
         }
         return new PageImpl(pgNo, buf.array(), this);
     }
@@ -133,6 +135,7 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
         int pgNo = pg.getPageNumber();
         long offset = pageOffset(pgNo);
 
+        fileLock.lock();
         try {
             ByteBuffer buf = ByteBuffer.wrap(pg.getData());
             fc.position(offset);
@@ -140,7 +143,8 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
             fc.force(false);
         } catch (IOException e) {
             Panic.panic(e);
+        } finally {
+            fileLock.unlock();
         }
     }
-
 }

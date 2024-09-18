@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -36,26 +37,55 @@ public class TransactionManagerImpl implements TransactionManager {
     private RandomAccessFile file;
     private FileChannel fc;
     private Lock counterLock;
+    private Lock fileLock;
     private long xidCounter;
 
     TransactionManagerImpl(RandomAccessFile raf, FileChannel fc) {
         this.file = raf;
         this.fc = fc;
+        fileLock = new ReentrantLock();
         counterLock = new ReentrantLock();
         checkXIDCounter();
+    }
+
+    // 创建事务管理器时，检查事务文件是否异常
+    private void checkXIDCounter() {
+        long fileLen = 0;
+        try {
+            fileLen = file.length();
+        } catch (IOException e1) {
+            Panic.panic(Error.BadXIDFileException);
+        }
+        if (fileLen < LEN_XID_HEADER_LENGTH) {
+            Panic.panic(Error.BadXIDFileException);
+        }
+
+        ByteBuffer buf = ByteBuffer.allocate(LEN_XID_HEADER_LENGTH);
+        try {
+            fc.position(0);
+            fc.read(buf);
+        } catch (IOException e) {
+            Panic.panic(e);
+        }
+        this.xidCounter = Parser.parseLong(buf.array());
+        long end = getXidPosition(this.xidCounter + 1);
+        if (end != fileLen) {
+            Panic.panic(Error.BadXIDFileException);
+        }
+
     }
 
     @Override
     public long begin() {
         counterLock.lock();
+        long xid = xidCounter + 1;
         try {
-            long xid = xidCounter + 1;
-            updateXID(xid, FIELD_TRAN_ACTIVE);
             incrXIDCounter();
-            return xid;
         } finally {
             counterLock.unlock();
         }
+        updateXID(xid, FIELD_TRAN_ACTIVE);
+        return xid;
     }
 
     @Override
@@ -102,86 +132,64 @@ public class TransactionManagerImpl implements TransactionManager {
         }
     }
 
-    // 创建事务管理器时，检查事务文件是否异常
-    private void checkXIDCounter() {
-        long fileLen = 0;
-        try {
-            fileLen = file.length();
-        } catch (IOException e1) {
-            Panic.panic(Error.BadXIDFileException);
-        }
-        if (fileLen < LEN_XID_HEADER_LENGTH) {
-            Panic.panic(Error.BadXIDFileException);
-        }
-
-        ByteBuffer buf = ByteBuffer.allocate(LEN_XID_HEADER_LENGTH);
-        try {
-            fc.position(0);
-            fc.read(buf);
-        } catch (IOException e) {
-            Panic.panic(e);
-        }
-        this.xidCounter = Parser.parseLong(buf.array());
-        long end = getXidPosition(this.xidCounter + 1);
-        if (end != fileLen) {
-            Panic.panic(Error.BadXIDFileException);
-        }
-
-    }
-
     // 根据事务xid取得其在xid文件中对应的位置（起始位置）
     private long getXidPosition(long xid) {
         return LEN_XID_HEADER_LENGTH + (xid - 1) * XID_FIELD_SIZE;
-    }
-
-    // 更新xid事务状态为status
-    private void updateXID(long xid, byte status) {
-        long offset = getXidPosition(xid);
-        byte[] tmp = new byte[XID_FIELD_SIZE];
-        tmp[0] = status;
-        ByteBuffer buf = ByteBuffer.wrap(tmp);
-
-        try {
-            fc.position(offset);
-            fc.write(buf);
-        } catch (IOException e) {
-            Panic.panic(e);
-        }
-
-        try {
-            fc.force(false);
-        } catch (IOException e) {
-            Panic.panic(e);
-        }
     }
 
     // 更新xidCounter，并保存到文件中
     private void incrXIDCounter() {
         xidCounter++;
         ByteBuffer buf = ByteBuffer.wrap(Parser.long2Byte(xidCounter));
+
+        fileLock.lock();
         try {
             fc.position(0);
             fc.write(buf);
-        } catch (IOException e) {
-            Panic.panic(e);
-        }
-        try {
             fc.force(false);
         } catch (IOException e) {
             Panic.panic(e);
+        } finally {
+            fileLock.unlock();
         }
+    }
+
+    // 更新xid事务状态
+    private void updateXID(long xid, byte status) {
+        long offset = getXidPosition(xid);
+        byte[] tmp = new byte[XID_FIELD_SIZE];
+        tmp[0] = status;
+        ByteBuffer buf = ByteBuffer.wrap(tmp);
+
+        fileLock.lock();
+        try {
+            fc.position(offset);
+            fc.write(buf);
+            fc.force(false);
+        } catch (IOException e) {
+            Panic.panic(e);
+        } finally {
+            fileLock.unlock();
+        }
+
+//        System.out.printf("write xid status %d %d\n", xid, (int)status);
     }
 
     // 检测XID事务是否处于status状态
     private boolean checkXID(long xid, byte status) {
         long offset = getXidPosition(xid);
         ByteBuffer buf = ByteBuffer.wrap(new byte[XID_FIELD_SIZE]);
+
+        fileLock.lock();
         try {
             fc.position(offset);
             fc.read(buf);
         } catch (IOException e) {
             Panic.panic(e);
+        } finally {
+            fileLock.unlock();
         }
+//        System.out.printf("read xid status %d %d\n", xid, (int)status);
         return buf.array()[0] == status;
     }
 }

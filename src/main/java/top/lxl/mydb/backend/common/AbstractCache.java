@@ -54,7 +54,7 @@ public abstract class AbstractCache<T> {
               return obj;
           }
 
-          if(maxResource > 0 && count == maxResource) {
+          if(maxResource > 0 && count == maxResource) { // maxResource == 0 表示没有限制
               lock.unlock();
               throw Error.CacheFullException;
           }

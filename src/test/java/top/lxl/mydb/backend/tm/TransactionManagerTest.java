@@ -18,12 +18,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class TransactionManagerTest {
 
     static Random random = new SecureRandom();
-    private int transCnt = 0;
     private String path = "transManager_test";
     private int workerCnts = 50;
     private int works = 3000;
     private TransactionManager transManager;
     private Map<Long, Byte> transMap;
+    private int transCnt = 0;
     private CountDownLatch cdl;
     private Lock lock = new ReentrantLock();
 
@@ -45,7 +45,6 @@ public class TransactionManagerTest {
         }
 
         transManager.close();
-
         assert new File(path + TransactionManagerImpl.XID_SUFFIX).delete();
     }
 
@@ -54,16 +53,18 @@ public class TransactionManagerTest {
         long transXID = 0;
         for(int i = 0; i < works; i++) {
             int op = Math.abs(random.nextInt(6));
-            if(op == 0) {
-                lock.lock();
-                if(inTrans == false) {
+            if(op <= 1) {
+                if(inTrans == false) { // 创建新事务
+                    lock.lock();
                     long xid = transManager.begin();
                     transMap.put(xid, (byte)0);
                     transCnt++;
+                    lock.unlock();
                     transXID = xid;
                     inTrans = true;
-                } else {
-                    int status = random.nextInt(Integer.MAX_VALUE) % 2 + 1;
+                } else { // 更新事务状态
+                    int status = Math.abs(random.nextInt(Integer.MAX_VALUE)) % 2 + 1;
+                    lock.lock();
                     switch (status) {
                         case 1:
                             transManager.commit(transXID);
@@ -73,13 +74,13 @@ public class TransactionManagerTest {
                             break;
                     }
                     transMap.put(transXID, (byte)status);
+                    lock.unlock();
                     inTrans = false;
                 }
-                lock.unlock();
-            } else {
-                lock.lock();
+            } else { // 检查事务状态是否正确
                 if(transCnt > 0) {
-                    long xid = (long)((random.nextInt(Integer.MAX_VALUE) % transCnt) + 1);
+                    lock.lock();
+                    long xid = ((Math.abs(random.nextInt(Integer.MAX_VALUE)) % transCnt) + 1);
                     byte status = transMap.get(xid);
                     boolean ok = false;
                     switch (status) {
@@ -92,9 +93,9 @@ public class TransactionManagerTest {
                         case 2:
                             ok = transManager.isAborted(xid);
                     }
+                    lock.unlock();
                     assert ok;
                 }
-                lock.unlock();
             }
         }
         cdl.countDown();;
